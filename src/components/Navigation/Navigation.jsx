@@ -24,7 +24,15 @@ const Navigation = ( {
                     {/* If 'Sign Out' is clicked, nav to 'signin' page */}
                     <p 
                         className={`${classes.navPara}`}
-                        onClick={onSignout} 
+                        onClick={() => {
+                            onSignout();
+                            /* localStorage */
+                            resetUser();
+                            removeUserFromLocalStorage();
+                            resetState();
+                            onRouteChange('signin');
+                            }
+                        } 
                     >
                         Sign Out
                     </p>
@@ -56,6 +64,6 @@ const Navigation = ( {
                 </div>
             </React.Fragment>
         );    
-}
+};
 
-export default Navigation
+export default Navigation;

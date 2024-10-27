@@ -25,12 +25,20 @@ import { returnDateTime } from './util/returnDateTime';
 
 import axios from 'axios';
 
-// const localStorage = window.localStorage;
+const localStorage = window.localStorage;
 
 class App extends Component {
   constructor() {
     super();
-    // const lastRoute = localStorage.getItem('lastRoute') || 'signin';
+    
+    const userData = localStorage.getItem('user');
+    const lastRoute = localStorage.getItem('lastRoute');
+    const defaultRoute = userData? (lastRoute || 'home') : 'signin';
+
+    // Load User's records from localStorage, or set to null if not yet stored
+    const userColorRecords = localStorage.getItem('userColorRecords');
+    const userCelebrityRecords = localStorage.getItem('userCelebrityRecords');
+    const userAgeRecords = localStorage.getItem('userAgeRecords');
         
     this.state = {
       input: '', // this.state.input => Users' input imageUrl => Can be used for onClick events
@@ -44,43 +52,74 @@ class App extends Component {
       face_hidden: true,
       color_hidden: true,
       age_hidden: true,
+      // isSignedIn: false, // Cookies
+      isSignedIn: userData ? true : false, // localStorage
       responseStatusCode: Number(''),
-      // route: defaultRoute,
-      route: 'signin',
-      // route: lastRoute,
-      isSignedIn: false,
-      // isSignedIn: userData ? true : false,
+      route: defaultRoute, // localStorage
+      // route: 'signin', // Cookies
 
-      user: {},
-      userCelebrityRecords: [],
-      userColorRecords: [],
-      userAgeRecords: [],
+      // user: {}, // Cookies
+      // userCelebrityRecords: [], // Cookies
+      // userColorRecords: [], // Cookies
+      // userAgeRecords: [], // Cookies
 
-      // user: userData ? JSON.parse(userData) : {},      
+      user: userData ? JSON.parse(userData) : {},
+      userCelebrityRecords: userCelebrityRecords ? JSON.parse(userCelebrityRecords) : null, // localStorage userCelebrityRecords{}
+      userColorRecords: userColorRecords ? JSON.parse(userColorRecords) : null, // localStorage userColorRecords{}
+      userAgeRecords: userAgeRecords ? JSON.parse(userAgeRecords) : null, // localStorage userAgeRecords{}    
     };
     /* this.state.dimensions => Bind methods for handleResize regarding this.handleResize */
     this.handleResize = this.handleResize.bind(this);
+
+    /* localStorage */
+    this.inactivityTimer = null;
   }
 
   componentDidMount() {
-    this.fetchUserData();
-
-    // setInterval(() => {
-    //   this.fetchUserData();
-    // }, 900000);
-
     /* Adding EventListener to window 'resize' events */
     window.addEventListener('resize', this.handleResize);
     setInterval(() => {
       this.setState({ dimensions: { width: window.innerWidth } });
     }, 300000);
 
+    /* Cookies */
+    /*
+    this.fetchUserData();
+  
     setInterval(() => {
       this.validateUsers();
     }, 900000);
+    */
+
+    /* localStorage */
+    this.loadUserFromLocalStorage();
+    this.resetInactivityTimer();
+    
+    // this.state.dimensions => Periodically clean up this.state.dimensions{} in every 5 minutes
+    this.dimensionsCleanupTimer = setInterval(() => {
+      this.setState({ dimensions: { width: window.innerWidth } });
+    }, 300000); // Reset this.state.dimensions{} in every 5 minutes
+
+    /* this.state.user => Refresh this.state.user every 3 seconds */
+    this.userRefreshInterval = setInterval(() => {
+      this.refreshUserData();
+    }, 3000);
+  }
+
+  /* localStorage */
+  refreshUserData() {
+    // Fetch user data from localStorage
+    const updatedUserData = localStorage.getItem('user');
+    if (updatedUserData) {
+      const user = JSON.parse(updatedUserData);
+      if (user !== this.state.user) {
+        this.setState({ user });
+      }
+    }
   }
 
   /* Session cookie */
+  /*
   fetchUserData = async() => {
     const devUserDataUrl = `http://localhost:3001/api/get-user-data`;
     const prodUserDataUrl = `https://ai-recognition-backend.onrender.com/api/get-user-data`;
@@ -103,37 +142,112 @@ class App extends Component {
       console.error(`\nFailed to fetch user data: `, err, `\n`);
     })
   }
-
-  saveUser = (user) => {
-    this.setState({ user: user} );
-  }
-
-  resetUser = () => {
-    this.setState({ user: {}, isSignedIn: false, route: 'signin' }, () => {
-      // this.removeUserFromLocalStorage();
-      console.log(`\nthis.state.isSignedIn after resetUser:\n`, this.state.isSignedIn, `\n`);//true
-    })
-  }
+  */
 
   /* Keep tracking for user state variables */
   // useEffect() hook combining componentDidUpdate & componentWillUnmount
   // Validate users whenever there's a change
   componentDidUpdate(prevProps, prevState) {
-    if (this.state.isSignedIn && prevState.user.id !== this.state.user.id) { 
+    if (prevState.user !== this.state.user) { 
       // this.validateUsers();
-      console.log(`\nUser updated: `, this.state.user.id);
+      console.log(`\nUser updated: `, this.state.user);
       // this.updateLocalStorage('user', this.state.user, prevState.user);
     }
+
+    /* localStorage */
+    if (this.state.route !== prevState.route) {
+      localStorage.setItem('lastRoute', this.state.route);
+    }
+
+    // Check if records have been updated & store them in localStorage
+    this.updateLocalStorage('userCelebrityRecords', this.state.userCelebrityRecords, prevState.userCelebrityRecords);
+
+    this.updateLocalStorage('userColorRecords', this.state.userColorRecords, prevState.userColorRecords);
+
+    this.updateLocalStorage('userAgeRecords', this.state.userAgeRecords, prevState.userAgeRecords);
   }
   
+  /* localStorage */
+  updateLocalStorage(key, newValue, oldValue) {
+    if (newValue !== oldValue) {
+      try {
+        localStorage.setItem(key, JSON.stringify(newValue));
+      } catch (err) {
+        console.error(`\nError updating ${key} in localStorage: `, err, `\n`);
+      }
+    }
+  }  
+
   componentWillUnmount() {
-    // clearTimeout(this.inactivityTimer);
     window.removeEventListener('resize', this.handleResize);
+
+    /* localStorage */
+    clearTimeout(this.inactivityTimer);
+    
+    // this.state.dimensions => Clear the interval on unmount to avoid memory leak on browser 
+    clearInterval(this.dimensionsCleanupTimer);
   }
 
   // Keep tracking window.innerWidth px
   handleResize() {
     this.setState({ dimensions: { width: window.innerWidth } });
+  }
+
+  resetUser = () => {
+    this.setState({ user: {}, isSignedIn: false, route: 'signin' }, () => {
+      /* localStorage */
+      this.removeUserFromLocalStorage();
+
+      console.log(`\nthis.state.isSignedIn after resetUser:\n`, this.state.isSignedIn, `\n`);//true
+    })
+  }
+
+  saveUser = (user) => {
+    this.setState({ user: user} );
+  }
+
+  saveUserToLocalStorage = (user) => {
+    // A callback function that accepts passed-in user to save user to window.localStorage
+    localStorage.setItem('user', JSON.stringify(user));
+  }
+
+  /* localStorage */
+  loadUserFromLocalStorage = () => {
+    const userData = localStorage.getItem('user');
+  
+    console.log(`\nuserData:`);
+    console.log(userData);
+  
+    // If there's 'user' in localStorage
+    if (userData) {
+      try {
+        this.setState({ 
+          user: JSON.parse(userData), 
+          isSignedIn: true,
+          route: localStorage.getItem('lastRoute') || 'home'
+          // ** route: 'home'
+        });
+      } catch (err) {
+        console.error(`\nFailed to parse user data: `, err);
+      }
+    } else {
+      console.log(`\nNo user data was found in local storage\n`);
+    }
+  }
+
+  /* localStorage */
+  removeUserFromLocalStorage = () => {
+    localStorage.removeItem('user');
+    // **
+    localStorage.removeItem('lastRoute');
+  }
+
+  /* localStorage */
+  resetInactivityTimer = () => {
+    clearTimeout(this.inactivityTimer);
+    
+    // Force users to sign out after 15 minutes (900000 milli-seconds)
+    this.inactivityTimer = setTimeout(this.resetUser, 900000); 
   }
   
   // For Celebrity detection model
@@ -184,13 +298,18 @@ class App extends Component {
     })
   };
 
-  // reset all User's color & celebrity & age detection records in Frontend
+  /* localStorage =>  reset all User's color & celebrity & age detection records in Frontend */
   resetUserRecords = () => {
     this.setState({
       userColorRecords: [],
       userCelebrityRecords: [],
       userAgeRecords: []
     });
+
+    // Also remove these items from localStorage
+    localStorage.removeItem('userColorRecords');
+    localStorage.removeItem('userCelebrityRecords');
+    localStorage.removeItem('userAgeRecords');
   }
 
   // Everytime any of the Detection Models is activated
@@ -278,7 +397,6 @@ class App extends Component {
         this.setState({
           userCelebrityRecords: response.celebrityData
         });
-
       };
     })
     .catch((err) => {
@@ -345,7 +463,7 @@ class App extends Component {
         this.setState({ responseStatusCode: response.status.code });
       })
       .catch(err => {
-        console.log(`\nError Fetching ${fetchUrl}:\n${err}\n`)
+        console.error(`\nError Fetching ${fetchUrl}:\n${err}\n`)
       });
   };
 
@@ -480,7 +598,6 @@ class App extends Component {
         this.setState({
           userAgeRecords: response.ageData
         });
-
       };
     })
     .catch((err) => {
@@ -601,8 +718,8 @@ class App extends Component {
     }
   };
 
-  // src/components/Navigation/Navigation.jsx
-  onSignout = async () => {
+  /* Cookies src/components/Navigation/Navigation.jsx */
+  /* onSignout = async () => {
     this.resetState();
 
     const devSignoutUrl = `http://localhost:3001/signout`;
@@ -627,6 +744,32 @@ class App extends Component {
     .catch((err) => {
       console.error(`Error signing out user: `, err, `\n`);
     })
+  }
+  */
+
+  /* localStorage */
+  onSignout = () => {
+    this.setState({
+      celebrity: {},
+      colors: [],
+      age: [],
+    }, 
+    () => this.resetUser(),
+    () => this.removeUserFromLocalStorage(),
+    () => this.resetState(),
+    () => console.log('this.state.celebrity:\n', this.state.celebrity),
+    () => console.log('this.state.colors:\n', this.state.colors),
+    () => console.log('this.state.age:\n', this.state.age),
+    () => this.onRouteChange('signin'));
+    // this.resetUser();
+    // this.removeUserFromLocalStorage();
+    // this.resetState();
+    // this.setState({
+    //   celebrity: {},
+    //   colors: [],
+    //   age: [],
+    // });
+    // this.onRouteChange('signin');
   }
 
   // To avoid malicious users from breaking in from <Register />
@@ -725,16 +868,24 @@ class App extends Component {
       ),
       'signin': (
         <Signin 
-          user={user}
-          saveUser={this.saveUser}
+          /* Cookies */
+          // user={user}
+          // saveUser={this.saveUser}
           onRouteChange={this.onRouteChange} 
+          /* localStorage */
+          saveUserToLocalStorage={this.saveUserToLocalStorage}
+          loadUserFromLocalStorage={this.loadUserFromLocalStorage}
         />
       ),
       'register': (
         <Register 
-          user={user}
-          saveUser={this.saveUser}
+          /* Cookies */
+          // user={user}
+          // saveUser={this.saveUser}
           onRouteChange={this.onRouteChange} 
+          /* localStorage */
+          saveUserToLocalStorage={this.saveUserToLocalStorage}
+          loadUserFromLocalStorage={this.loadUserFromLocalStorage}
         />
       ),
       'ageRecords': (
@@ -814,7 +965,8 @@ class App extends Component {
         <Navigation
           user={user}
           isSignedIn={isSignedIn}
-          // removeUserFromLocalStorage={this.removeUserFromLocalStorage}
+          /* localStorage */
+          removeUserFromLocalStorage={this.removeUserFromLocalStorage}
           onRouteChange={this.onRouteChange}
           resetUser={this.resetUser}
           resetState={this.resetState}

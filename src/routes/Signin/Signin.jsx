@@ -53,14 +53,35 @@ class Signin extends Component {
     fetch(fetchUrl, {
       method: 'post', // Post (Create) to avoid Query Strings
       headers: {'Content-Type': 'application/json'},
-      credentials: 'include', // Include credentials to handle cookies
+      // credentials: 'include', // Cookies 'include' credentials to handle cookies
       body: JSON.stringify({ // sending stringified this.state variables as JSON objects
         email: this.state.signInEmail,
         password: this.state.signInPassword
       })
     })
     .then(response => response.json()) // http://localhost:3001/signin server response to parse JSON data user
-    .then((user) => {
+    .then(user => { // server.js - app.post('/signin') --> res.json(database.users[i])
+      console.log('onSubmitSignIn - response: \n', user);
+      console.log('onSubmitSignIn - typeof response: \n', typeof user);
+      if (user.id) { // if user.id exists upon successful fetching from db
+        // Invoke App.js saveUserToLocalStorage 
+        this.props.saveUserToLocalStorage(user);
+
+        // Invoke App.js loadUserFromLocalStorage to this.setState(user:{})
+        this.props.loadUserFromLocalStorage();
+
+        this.props.onRouteChange('home');
+      } else if (!user.id) { // if user.id does NOT exist
+        // Reset users' inputed password
+        const signInPasswordInput = document.querySelector('#current-password');
+        this.props.onRouteChange('signin');
+        signInPasswordInput.value = '';
+        this.onIncorrect();
+      }
+    })
+
+    /* Cookies */
+    /*.then((user) => {
       if (user.id) { // If the user can be found & user.id exists
         this.props.onRouteChange('home', () => {
           this.props.saveUser(user);
@@ -75,6 +96,7 @@ class Signin extends Component {
       console.error(`\nError in fetching ${fetchUrl} for signing users in:\n${err}\n`);
       this.onIncorrect();
     })
+    */
   };
 
   validateInputs = () => {

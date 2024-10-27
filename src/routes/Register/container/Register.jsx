@@ -80,12 +80,11 @@ class Register extends Component {
   }
 
   // To validate users' inputs in <Register />
-  validateInputs = () => {    
-        
-        // Validate name input 
-        const nameRegExp = new RegExp(/^[a-zA-Z]+$/, 'gm');
-        const nameValidation = nameRegExp.test(this.state.name);
-        if (nameValidation && this.state.name.length >= 3) {
+  validateInputs = () => {        
+    // Validate name input 
+    const nameRegExp = new RegExp(/^[a-zA-Z]+$/, 'gm');
+    const nameValidation = nameRegExp.test(this.state.name);
+    if (nameValidation && this.state.name.length >= 3) {
           this.setState({
             nameValid: true
           });
@@ -261,15 +260,51 @@ class Register extends Component {
       })
     })
     .then(response => response.json()) // res.json() to parse data
-    .then(user => { // data passing in as user with props
+    .then(user => { /* localStorage */
       console.log('onRegisterSignIn - user: \n', user);
       if (user.id) { /* If we get a user with props => route to 'home'; this.props coming from App.js; Parent App.js front-end will handle user features */
 
         // Invoke App.js saveUserToLocalStorage() passed to this child component as props
-        // this.props.saveUserToLocalStorage(user);
+        this.props.saveUserToLocalStorage(user);
 
         // Invoke App.js loadUserFromLocalStorage() passed to this child component as props
-        // this.props.loadUserFromLocalStorage();
+        this.props.loadUserFromLocalStorage();
+
+        this.props.onRouteChange('home');
+      } else if (!user.id) {
+        this.props.onRouteChange('register');
+        
+        // If users registered with existed emails
+        this.setState({
+          emailRegistered: true,
+          email: '',
+          password: '',
+          passwordConfirm: ''
+        })
+
+        this.resetInputs();
+
+        // Clear off previous user inputs
+        const nameInput = document.querySelector('#name');
+        const emailInput = document.querySelector('#email');
+        const passwordInput = document.querySelector('#password');
+        const passwordConfirmInput = document.querySelector('#passwordConfirm');
+        nameInput.value = '';
+        emailInput.value = '';
+        passwordInput.value = '';
+        passwordConfirmInput.value = '';
+        
+      }
+    })
+    .catch((err) => {
+      console.error(`\nError registering user: ${err}\n`);
+    })
+
+    /* Cookies */
+    /*
+    .then(user => { // data passing in as user with props
+      console.log('onRegisterSignIn - user: \n', user);
+      if (user.id) { // If we get a user with props => route to 'home'; this.props coming from App.js; Parent App.js front-end will handle user features
         this.props.saveUserId(user.id);
         this.props.onRouteChange('home');
 
@@ -298,10 +333,13 @@ class Register extends Component {
         
       }
     })
+    .catch((err) => {
+      console.error(`\nError registering user: ${err}\n`);
+    })
+    */
   }
 
   render() {
-
     // Destructuring props from this.state
     const { 
       nameValid,
@@ -410,5 +448,6 @@ class Register extends Component {
       </div>
     );
   }
-}
+};
+
 export default Register;
